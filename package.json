@@ -1,0 +1,106 @@
+{
+  "name": "awesome-todo",
+  "displayName": "Awesome-TODO",
+  "description": "Manage local and remote TODOs with team collaboration features",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "localTodo.convertTodo",
+        "title": "Convert to Local TODO"
+      },
+      {
+        "command": "localTodo.listTodos",
+        "title": "List Local TODOs"
+      },
+      {
+        "command": "localTodo.removeTodo",
+        "title": "Remove Local TODO"
+      },
+      {
+        "command": "localTodo.editTodo",
+        "title": "Edit Local TODO"
+      },
+      {
+        "command": "localTodo.editTodosInFile",
+        "title": "Edit Local TODOs"
+      },
+      {
+        "command": "localTodo.editTodosInLine",
+        "title": "Edit Local TODOs in Line"
+      },
+      {
+        "command": "localTodo.moveTodo",
+        "title": "Move Local TODO"
+      },
+      {
+        "command": "remoteTodo.convertTodo",
+        "title": "Convert to Remote TODO"
+      },
+      {
+        "command": "remoteTodo.addTodo",
+        "title": "Add Remote TODO"
+      },
+      {
+        "command": "remoteTodo.listTodos",
+        "title": "List Remote TODOs"
+      },
+      {
+        "command": "remoteTodo.removeTodo",
+        "title": "Remove Remote TODO"
+      },
+      {
+        "command": "remoteTodo.editTodo",
+        "title": "Edit Remote TODO"
+      },
+      {
+        "command": "remoteTodo.assignTodo",
+        "title": "Assign Remote TODO"
+      },
+      {
+        "command": "remoteTodo.moveTodo",
+        "title": "Move Remote TODO"
+      },
+      {
+        "command": "remoteTodo.manageTeam",
+        "title": "Manage Team Members"
+      }
+    ],
+    "languages": [
+      {
+        "id": "javascript",
+        "extensions": [".js"],
+        "aliases": ["JavaScript"]
+      },
+      {
+        "id": "typescript",
+        "extensions": [".ts"],
+        "aliases": ["TypeScript"]
+      },
+      {
+        "id": "python",
+        "extensions": [".py"],
+        "aliases": ["Python"]
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.5"
+  }
+}

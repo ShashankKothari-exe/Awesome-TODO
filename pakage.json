@@ -1,0 +1,27 @@
+{
+  "contributes": {
+    "commands": [
+      {
+        "command": "localTodo.convertTodo",
+        "title": "Convert to Local TODO"
+      }
+    ],
+    "languages": [
+      {
+        "id": "javascript",
+        "extensions": [".js"],
+        "aliases": ["JavaScript"]
+      },
+      {
+        "id": "typescript",
+        "extensions": [".ts"],
+        "aliases": ["TypeScript"]
+      },
+      {
+        "id": "python",
+        "extensions": [".py"],
+        "aliases": ["Python"]
+      }
+    ]
+  }
+}
