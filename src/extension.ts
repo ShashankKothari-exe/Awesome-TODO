@@ -641,7 +641,7 @@ export function activate(context: vscode.ExtensionContext) {
     "localTodo.moveTodo",
     async (document: vscode.TextDocument, lineNumber: number, todo: Todo) => {
       const input = await vscode.window.showInputBox({
-        prompt: "Enter the line number to move this TODO to",
+        prompt: "Enter the line number to move this remote TODO on top of",
         placeHolder: "e.g., 15",
         validateInput: (value) => {
           const num = parseInt(value);
@@ -1032,7 +1032,7 @@ export function activate(context: vscode.ExtensionContext) {
     "remoteTodo.moveTodo",
     async (document: vscode.TextDocument, lineNumber: number, todo: Todo) => {
       const input = await vscode.window.showInputBox({
-        prompt: "Enter the line number to move this remote TODO to",
+        prompt: "Enter the line number to move this remote TODO on top of",
         placeHolder: "e.g., 15",
         validateInput: (value) => {
           const num = parseInt(value);
