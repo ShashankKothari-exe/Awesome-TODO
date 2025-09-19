@@ -156,15 +156,61 @@ class TodoCodeLensProvider implements vscode.CodeLensProvider {
 let decorationType: vscode.TextEditorDecorationType;
 let refreshTimeout: NodeJS.Timeout | undefined;
 let diagnosticCollection: vscode.DiagnosticCollection;
-// Status bar item for TODO information
-let statusBarItem: vscode.StatusBarItem;
+let statusBarUpdateTimeout: NodeJS.Timeout | undefined;
+
+// Performance optimization: Cache for TODO data
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+  ttl: number; // Time to live in milliseconds
+}
+
+class TodoCache {
+  private cache = new Map<string, CacheEntry>();
+  private readonly DEFAULT_TTL = 2000; // 2 seconds
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    if (Date.now() - entry.timestamp > entry.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data as T;
+  }
+
+  set<T>(key: string, data: T, ttl: number = this.DEFAULT_TTL): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ttl
+    });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  // Clean up expired entries
+  cleanup(): void {
+    const now = Date.now();
+    const keysToDelete: string[] = [];
+
+    this.cache.forEach((entry, key) => {
+      if (now - entry.timestamp > entry.ttl) {
+        keysToDelete.push(key);
+      }
+    });
+
+    keysToDelete.forEach(key => this.cache.delete(key));
+  }
+}
+
+const todoCache = new TodoCache();
 
 export function activate(context: vscode.ExtensionContext) {
-  // Create status bar item for TODO information
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBarItem.command = 'awesomeTodo.listAllTodos';
-  context.subscriptions.push(statusBarItem);
-
   // Create diagnostic collection for TODOs
   diagnosticCollection = vscode.languages.createDiagnosticCollection('localTodos');
   context.subscriptions.push(diagnosticCollection);
@@ -331,6 +377,9 @@ export function activate(context: vscode.ExtensionContext) {
       const existingTodos = await loadTodos(file);
       const updatedTodos = [...existingTodos, ...todos];
       await saveTodos(updatedTodos, file);
+
+      // Clear cache for this file
+      todoCache.clear();
 
       // Smart line removal: remove entire line if it only contains the TODO comment
       const edit = new vscode.WorkspaceEdit();
@@ -665,6 +714,9 @@ export function activate(context: vscode.ExtensionContext) {
       const updatedTodos = [...existingTodos, todo];
       await saveRemoteTodos(updatedTodos, file);
 
+      // Clear cache for this file
+      todoCache.clear();
+
       // Remove the TODO comment from code
       const edit = new vscode.WorkspaceEdit();
       const commentRegex = /^(\s*)((\/\/)|#)\s*TODO[:\-]?.*$/i;
@@ -730,6 +782,9 @@ export function activate(context: vscode.ExtensionContext) {
       const existingTodos = await loadRemoteTodos(file);
       const updatedTodos = [...existingTodos, todo];
       await saveRemoteTodos(updatedTodos, file);
+
+      // Clear cache for this file
+      todoCache.clear();
 
       codeLensProvider.refresh();
       vscode.window.showInformationMessage(`Remote TODO "${message}" added.`);
@@ -917,6 +972,10 @@ export function activate(context: vscode.ExtensionContext) {
       // Update the todo
       allRemoteTodos[todoIndex].updatedAt = new Date().toISOString();
       await saveRemoteTodos(allRemoteTodos, file);
+
+      // Clear cache for this file
+      todoCache.clear();
+
       codeLensProvider.refresh();
     }
   );
@@ -929,6 +988,10 @@ export function activate(context: vscode.ExtensionContext) {
       const updatedTodos = allRemoteTodos.filter(t => t.id !== todo.id);
 
       await saveRemoteTodos(updatedTodos, file);
+
+      // Clear cache for this file
+      todoCache.clear();
+
       codeLensProvider.refresh();
 
       vscode.window.showInformationMessage(`Remote TODO "${todo.message}" removed.`);
@@ -954,6 +1017,10 @@ export function activate(context: vscode.ExtensionContext) {
         allRemoteTodos[todoIndex].updatedAt = new Date().toISOString();
 
         await saveRemoteTodos(allRemoteTodos, file);
+
+        // Clear cache for this file
+        todoCache.clear();
+
         codeLensProvider.refresh();
 
         vscode.window.showInformationMessage(`Remote TODO updated to "${newMessage}".`);
@@ -987,6 +1054,10 @@ export function activate(context: vscode.ExtensionContext) {
           allRemoteTodos[todoIndex].updatedAt = new Date().toISOString();
 
           await saveRemoteTodos(allRemoteTodos, file);
+
+          // Clear cache for this file
+          todoCache.clear();
+
           codeLensProvider.refresh();
 
           vscode.window.showInformationMessage(`Remote TODO moved to line ${newLineNumber + 1}`);
@@ -1108,39 +1179,9 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions
   );
 
-  // Update status bar when cursor changes
-  vscode.window.onDidChangeTextEditorSelection(
-    (event) => {
-      if (event.textEditor) {
-        updateStatusBar(event.textEditor);
-      }
-    },
-    null,
-    context.subscriptions
-  );
-
-  // Update status bar when active editor changes
-  vscode.window.onDidChangeActiveTextEditor(
-    (editor) => {
-      if (editor) {
-        updateStatusBar(editor);
-      } else {
-        statusBarItem.hide();
-      }
-    },
-    null,
-    context.subscriptions
-  );
-
   // Initial refresh
   debouncedRefreshDecorations();
   updateDiagnostics();
-
-  // Show status bar initially
-  const activeEditor = vscode.window.activeTextEditor;
-  if (activeEditor) {
-    updateStatusBar(activeEditor);
-  }
 }
 
 function debouncedRefreshDecorations() {
@@ -1191,59 +1232,7 @@ async function updateDiagnostics() {
   }
 }
 
-// Update status bar with current TODO information
-async function updateStatusBar(editor: vscode.TextEditor) {
-  // Load local TODOs
-  const localTodos = await loadTodos(editor.document.uri.fsPath);
-  const fileLocalTodos = localTodos.filter(todo => todo.file === editor.document.uri.fsPath);
 
-  // Load remote TODOs and filter by user visibility
-  const userInfo = getGitUserInfo();
-  const userEmail = userInfo?.email || '';
-  const allRemoteTodos = await loadRemoteTodos(editor.document.uri.fsPath);
-  const visibleRemoteTodos = filterVisibleRemoteTodos(allRemoteTodos, userEmail).filter(todo => todo.file === editor.document.uri.fsPath);
-
-  // Combine all visible TODOs
-  const allVisibleTodos = [...fileLocalTodos, ...visibleRemoteTodos];
-
-  if (allVisibleTodos.length === 0) {
-    statusBarItem.hide();
-    return;
-  }
-
-  // Find the TODO closest to the cursor position
-  const cursorLine = editor.selection.active.line;
-  let closestTodo = allVisibleTodos[0];
-  let minDistance = Math.abs(cursorLine - closestTodo.line);
-
-  for (const todo of allVisibleTodos) {
-    const distance = Math.abs(cursorLine - todo.line);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestTodo = todo;
-    }
-  }
-
-  // Update status bar with TODO information
-  const todoCount = allVisibleTodos.length;
-  const lineNumber = closestTodo.line + 1;
-  const isRemote = closestTodo.type === 'remote';
-  const authorName = isRemote ? (closestTodo.author?.name || 'Unknown') : '';
-  const todoType = isRemote ? 'Remote' : 'Local';
-
-  // Update status bar text and tooltip based on TODO type
-  if (isRemote) {
-    statusBarItem.text = `🌐 TODO: ${closestTodo.message} (Line ${lineNumber})`;
-    statusBarItem.tooltip = `${todoType} TODO by ${authorName}: ${closestTodo.message}\nLine: ${lineNumber}\nTotal TODOs: ${todoCount}\n\nClick to view all TODOs`;
-    statusBarItem.color = '#1976d2'; // Blue color for remote
-  } else {
-    statusBarItem.text = `📝 TODO: ${closestTodo.message} (Line ${lineNumber})`;
-    statusBarItem.tooltip = `${todoType} TODO: ${closestTodo.message}\nLine: ${lineNumber}\nTotal TODOs: ${todoCount}\n\nClick to view all TODOs`;
-    statusBarItem.color = '#ff9800'; // Orange color for local
-  }
-
-  statusBarItem.show();
-}
 
 // Auto-manage .gitignore entries for local files
 async function ensureGitIgnoreEntries() {
